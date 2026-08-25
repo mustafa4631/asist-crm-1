@@ -11,6 +11,12 @@ services:
     volumes:
       - flowcrm-data:/data
       - flowcrm-uploads:/app/uploads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flowcrm.rule=Host(`konut.normworkon.tech`)"
+      - "traefik.http.routers.flowcrm.entrypoints=websecure"
+      - "traefik.http.routers.flowcrm.tls.certresolver=letsencrypt"
+      - "traefik.http.services.flowcrm.loadbalancer.server.port=3000"
     restart: unless-stopped
 
 volumes:

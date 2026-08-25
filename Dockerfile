@@ -35,7 +35,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/scripts/docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chmod +x ./docker-entrypoint.sh && mkdir -p /data /app/uploads && chown -R nextjs:nodejs /data /app/uploads
+RUN chmod +x ./docker-entrypoint.sh && mkdir -p /data /app/uploads && chown -R nextjs:nodejs /app /data /app/uploads
 
 USER nextjs
 

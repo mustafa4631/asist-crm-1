@@ -54,7 +54,8 @@ export async function syncInboxFromImap(
     await client.connect();
     lock = await client.getMailboxLock("INBOX");
     try {
-      result.totalInMailbox = client.mailbox?.exists ?? 0;
+      const mailbox = client.mailbox && typeof client.mailbox === "object" ? client.mailbox : null;
+      result.totalInMailbox = mailbox?.exists ?? 0;
       if (result.totalInMailbox === 0) {
         return result;
       }

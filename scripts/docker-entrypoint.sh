@@ -4,8 +4,7 @@ set -e
 export DATABASE_URL="${DATABASE_URL:-file:/data/flowcrm.db}"
 
 echo "Applying database schema..."
-npx prisma db push
-npx prisma generate
+npx prisma db push --accept-data-loss --skip-generate
 
 echo "Ensuring default job types..."
 node <<'EOF'
