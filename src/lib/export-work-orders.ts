@@ -21,6 +21,13 @@ import {
 export interface ExportOrder {
   ticketNo: string;
   title: string;
+  asistansDosyaNo: string | null;
+  insuredFirstName: string | null;
+  insuredLastName: string | null;
+  insuredPhone: string | null;
+  insuredAddress: string | null;
+  insuredCity: string | null;
+  insuredDistrict: string | null;
   description: string | null;
   jobType: string;
   status: string;
@@ -30,34 +37,22 @@ export interface ExportOrder {
   invoiceAmount: number;
   supplierCost: number;
   insuranceCompany: {
-    shortCode: string | null;
     name: string;
-    city: string | null;
-    address: string | null;
-    contactPerson: string | null;
-    phone: string | null;
-    assistanceContactName: string | null;
-    assistancePhone: string | null;
-    accountManagerName: string | null;
-    accountManagerPhone: string | null;
   };
   assignedTo: { name: string } | null;
 }
 
 const HEADERS = [
   domainLabels.workOrder.ticket,
-  domainLabels.insuranceCompany.shortCode,
+  domainLabels.workOrder.assistanceFileNo,
   domainLabels.insuranceCompany.one,
-  "Şehir",
+  "Sigortalı Adı",
+  "Sigortalı Soyadı",
+  "Sigortalı Telefon",
+  "İl",
+  "İlçe",
   "Adres",
-  domainLabels.insuranceCompany.contact,
-  "Telefon",
-  domainLabels.insuranceCompany.assistanceContact,
-  "Asistans telefon",
-  domainLabels.insuranceCompany.accountManager,
-  "Hesap yöneticisi telefon",
-  "Hizmet türü",
-  "Sistem No",
+  "Hizmet Türü",
   "Açıklama",
   "Öncelik",
   "Durum",
@@ -69,26 +64,22 @@ const HEADERS = [
   "Kâr (₺)",
 ];
 
-const COLUMN_WIDTHS = [12, 14, 22, 12, 28, 18, 14, 18, 14, 18, 16, 16, 28, 32, 10, 22, 16, 18, 18, 16, 16, 12];
-const CURRENCY_COLUMNS = [20, 21, 22];
-const PRIORITY_COLUMN = 15;
+const COLUMN_WIDTHS = [14, 16, 22, 16, 16, 16, 14, 14, 30, 18, 28, 12, 18, 18, 18, 18, 18, 20, 14];
+const CURRENCY_COLUMNS = [17, 18, 19];
+const PRIORITY_COLUMN = 12;
 
 function orderToRow(o: ExportOrder, jobTypeLabelMap: Record<string, string>) {
-  const c = o.insuranceCompany;
   return [
-    o.title,
-    c.shortCode ?? "",
-    c.name,
-    c.city ?? "",
-    c.address ?? "",
-    c.contactPerson ?? "",
-    c.phone ?? "",
-    c.assistanceContactName ?? "",
-    c.assistancePhone ?? "",
-    c.accountManagerName ?? "",
-    c.accountManagerPhone ?? "",
+    o.title ?? "",
+    o.asistansDosyaNo ?? "",
+    o.insuranceCompany?.name ?? "",
+    o.insuredFirstName ?? "",
+    o.insuredLastName ?? "",
+    o.insuredPhone ?? "",
+    o.insuredCity ?? "",
+    o.insuredDistrict ?? "",
+    o.insuredAddress ?? "",
     jobTypeLabelMap[o.jobType] ?? o.jobType,
-    o.ticketNo,
     o.description ?? "",
     priorityLabels[o.priority] ?? o.priority,
     workOrderStatusLabels[o.status] ?? o.status,
