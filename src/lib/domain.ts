@@ -41,3 +41,29 @@ export const domainLabels = {
 export function formatTicketNo(seq: number, year = new Date().getFullYear()) {
   return `${TICKET_NO_PREFIX}-${year}-${String(seq).padStart(4, "0")}`;
 }
+
+export async function getNextTicketNo(
+  prisma: { workOrder: { findMany: (args: any) => Promise<Array<{ ticketNo: string }>> } },
+  year = new Date().getFullYear()
+): Promise<string> {
+  const prefix = `${TICKET_NO_PREFIX}-${year}-`;
+  const orders = await prisma.workOrder.findMany({
+    where: {
+      ticketNo: {
+        startsWith: prefix,
+      },
+    },
+    select: { ticketNo: true },
+  });
+
+  let maxSeq = 0;
+  for (const order of orders) {
+    const parts = order.ticketNo.split("-");
+    const num = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(num) && num > maxSeq) {
+      maxSeq = num;
+    }
+  }
+
+  return formatTicketNo(maxSeq + 1, year);
+}

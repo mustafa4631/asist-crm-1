@@ -1,4 +1,4 @@
-import { formatTicketNo, domainLabels } from "@/lib/domain";
+import { formatTicketNo, getNextTicketNo, domainLabels } from "@/lib/domain";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/api-auth";
@@ -92,9 +92,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Koordinatör seçimi zorunludur" }, { status: 400 });
   }
 
-  const count = await prisma.workOrder.count();
-  const ticketNo = formatTicketNo(count + 1);
-
   const resolved = await resolveResponsibleId(assignedToId);
   if ("error" in resolved) {
     return NextResponse.json({ error: resolved.error }, { status: 400 });
@@ -107,67 +104,83 @@ export async function POST(request: Request) {
 
   const parsedAppointmentAt = parseAppointmentAt(appointmentAt);
 
-  try {
-    const order = await prisma.workOrder.create({
-      data: {
-        ticketNo,
-        title: dosyaNo,
-        asistansDosyaNo: assistanceNo,
-        insuredFirstName: String(insuredFirstName).trim(),
-        insuredLastName: String(insuredLastName).trim(),
-        insuredPhone: String(insuredPhone).trim(),
-        insuredAddress: typeof insuredAddress === "string" ? insuredAddress.trim() || null : null,
-        insuredCity: typeof insuredCity === "string" ? insuredCity.trim() || null : null,
-        insuredDistrict: typeof insuredDistrict === "string" ? insuredDistrict.trim() || null : null,
-        description,
-        jobType: resolvedJobType.code,
-        insuranceCompanyId,
-        priority: priority ?? "NORMAL",
-        assignedToId: resolved.id,
-        notes,
-        ...(parsedAppointmentAt !== undefined ? { appointmentAt: parsedAppointmentAt } : {}),
-        ...(typeof operatorNote === "string" && operatorNote.trim()
-          ? {
-              operatorNotes: {
-                create: {
-                  content: operatorNote.trim(),
-                  authorId: user!.id,
+  let order: any = null;
+  const MAX_ATTEMPTS = 5;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const ticketNo = await getNextTicketNo(prisma);
+
+    try {
+      order = await prisma.workOrder.create({
+        data: {
+          ticketNo,
+          title: dosyaNo,
+          asistansDosyaNo: assistanceNo,
+          insuredFirstName: String(insuredFirstName).trim(),
+          insuredLastName: String(insuredLastName).trim(),
+          insuredPhone: String(insuredPhone).trim(),
+          insuredAddress: typeof insuredAddress === "string" ? insuredAddress.trim() || null : null,
+          insuredCity: typeof insuredCity === "string" ? insuredCity.trim() || null : null,
+          insuredDistrict: typeof insuredDistrict === "string" ? insuredDistrict.trim() || null : null,
+          description,
+          jobType: resolvedJobType.code,
+          insuranceCompanyId,
+          priority: priority ?? "NORMAL",
+          assignedToId: resolved.id,
+          notes,
+          ...(parsedAppointmentAt !== undefined ? { appointmentAt: parsedAppointmentAt } : {}),
+          ...(typeof operatorNote === "string" && operatorNote.trim()
+            ? {
+                operatorNotes: {
+                  create: {
+                    content: operatorNote.trim(),
+                    authorId: user!.id,
+                  },
                 },
-              },
-            }
-          : {}),
-      },
-      include: {
-        insuranceCompany: true,
-        assignedTo: { select: { id: true, name: true } },
-        operatorNotes: {
-          include: { author: { select: { id: true, name: true } } },
-          orderBy: { createdAt: "asc" },
+              }
+            : {}),
         },
-      },
-    });
+        include: {
+          insuranceCompany: true,
+          assignedTo: { select: { id: true, name: true } },
+          operatorNotes: {
+            include: { author: { select: { id: true, name: true } } },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
 
-    await syncWorkOrderPlannerEvent(prisma, order.id);
-
-    logActivity({
-      userId: user!.id,
-      action: "create",
-      entityType: "work_order",
-      entityId: order.id,
-      entityLabel: order.ticketNo,
-      details: order.title,
-    });
-
-    return NextResponse.json(order, { status: 201 });
-  } catch (err) {
-    if (
-      err &&
-      typeof err === "object" &&
-      "code" in err &&
-      (err as { code?: string }).code === "P2002"
-    ) {
-      return NextResponse.json({ error: "Sistem kayıt numarası çakıştı, tekrar deneyin." }, { status: 409 });
+      break;
+    } catch (err) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        if (attempt === MAX_ATTEMPTS - 1) {
+          return NextResponse.json({ error: "Sistem kayıt numarası çakıştı, lütfen tekrar deneyin." }, { status: 409 });
+        }
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
+
+  if (!order) {
+    return NextResponse.json({ error: "Kayıt oluşturulamadı." }, { status: 500 });
+  }
+
+  await syncWorkOrderPlannerEvent(prisma, order.id);
+
+  logActivity({
+    userId: user!.id,
+    action: "create",
+    entityType: "work_order",
+    entityId: order.id,
+    entityLabel: order.ticketNo,
+    details: order.title,
+  });
+
+  return NextResponse.json(order, { status: 201 });
 }

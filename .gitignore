@@ -21,3 +21,4 @@ pnpm-debug.log*
 
 docker-compose.override.ymlnode_modules/
 tsconfig.tsbuildinfo
+backups/

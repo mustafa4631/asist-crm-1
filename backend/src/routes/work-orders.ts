@@ -8,7 +8,7 @@ import { resolveResponsibleId } from "../lib/responsibles.js";
 import { resolveJobTypeCode } from "@asistcrm/lib/job-types";
 import { syncRepairItems, type RepairItemInput } from "@asistcrm/lib/repair-items";
 import { syncSupplierLedger } from "@asistcrm/lib/supplier-ledger";
-import { formatTicketNo } from "@asistcrm/lib/domain";
+import { formatTicketNo, getNextTicketNo } from "@asistcrm/lib/domain";
 
 export const workOrdersRouter = Router();
 
@@ -85,51 +85,60 @@ workOrdersRouter.post("/", requirePermission("orders:write"), async (req, res) =
     return;
   }
 
-  const count = await prisma.workOrder.count();
-  const ticketNo = formatTicketNo(count + 1);
+  let order: any = null;
+  const MAX_ATTEMPTS = 5;
 
-  const resolved = await resolveResponsibleId(assignedToId);
-  if ("error" in resolved) {
-    res.status(400).json({ error: resolved.error });
-    return;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const ticketNo = await getNextTicketNo(prisma);
+
+    try {
+      order = await prisma.workOrder.create({
+        data: {
+          ticketNo,
+          title: dosyaNo,
+          asistansDosyaNo: assistanceNo,
+          insuredFirstName: String(insuredFirstName).trim(),
+          insuredLastName: String(insuredLastName).trim(),
+          insuredPhone: String(insuredPhone).trim(),
+          insuredAddress: typeof insuredAddress === "string" ? insuredAddress.trim() || null : null,
+          insuredCity: typeof insuredCity === "string" ? insuredCity.trim() || null : null,
+          insuredDistrict: typeof insuredDistrict === "string" ? insuredDistrict.trim() || null : null,
+          description,
+          jobType: resolvedJobType.code,
+          insuranceCompanyId,
+          priority: priority ?? "NORMAL",
+          assignedToId: resolved.id,
+          notes,
+          ...(typeof operatorNote === "string" && operatorNote.trim()
+            ? {
+                operatorNotes: {
+                  create: { content: operatorNote.trim(), authorId: req.user!.id },
+                },
+              }
+            : {}),
+        },
+        include: {
+          insuranceCompany: true,
+          assignedTo: { select: { id: true, name: true } },
+        },
+      });
+      break;
+    } catch (err: any) {
+      if (err && typeof err === "object" && err.code === "P2002") {
+        if (attempt === MAX_ATTEMPTS - 1) {
+          res.status(409).json({ error: "Sistem kayıt numarası çakıştı, lütfen tekrar deneyin." });
+          return;
+        }
+        continue;
+      }
+      throw err;
+    }
   }
 
-  const resolvedJobType = await resolveJobTypeCode(prisma, String(jobType));
-  if ("error" in resolvedJobType) {
-    res.status(400).json({ error: resolvedJobType.error });
+  if (!order) {
+    res.status(500).json({ error: "Kayıt oluşturulamadı." });
     return;
   }
-
-  const order = await prisma.workOrder.create({
-    data: {
-      ticketNo,
-      title: dosyaNo,
-      asistansDosyaNo: assistanceNo,
-      insuredFirstName: String(insuredFirstName).trim(),
-      insuredLastName: String(insuredLastName).trim(),
-      insuredPhone: String(insuredPhone).trim(),
-      insuredAddress: typeof insuredAddress === "string" ? insuredAddress.trim() || null : null,
-      insuredCity: typeof insuredCity === "string" ? insuredCity.trim() || null : null,
-      insuredDistrict: typeof insuredDistrict === "string" ? insuredDistrict.trim() || null : null,
-      description,
-      jobType: resolvedJobType.code,
-      insuranceCompanyId,
-      priority: priority ?? "NORMAL",
-      assignedToId: resolved.id,
-      notes,
-      ...(typeof operatorNote === "string" && operatorNote.trim()
-        ? {
-            operatorNotes: {
-              create: { content: operatorNote.trim(), authorId: req.user!.id },
-            },
-          }
-        : {}),
-    },
-    include: {
-      insuranceCompany: true,
-      assignedTo: { select: { id: true, name: true } },
-    },
-  });
 
   logActivity({
     userId: req.user!.id,
