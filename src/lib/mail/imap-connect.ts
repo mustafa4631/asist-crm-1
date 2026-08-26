@@ -26,7 +26,7 @@ export async function connectImapClient(settings: MailSetting): Promise<ImapFlow
   for (const loginMethod of IMAP_LOGIN_METHODS) {
     const client = new ImapFlow(buildImapOptions(settings, loginMethod));
     client.on("error", (err) => {
-      console.error("[imap]", err);
+      // prevent unhandled event exception
     });
 
     try {

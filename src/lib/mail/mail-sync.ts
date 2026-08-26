@@ -51,7 +51,6 @@ export async function syncInboxFromImap(
   let lock: { release: () => void } | null = null;
 
   try {
-    await client.connect();
     lock = await client.getMailboxLock("INBOX");
     try {
       const mailbox = client.mailbox && typeof client.mailbox === "object" ? client.mailbox : null;
