@@ -85,6 +85,18 @@ workOrdersRouter.post("/", requirePermission("orders:write"), async (req, res) =
     return;
   }
 
+  const resolved = await resolveResponsibleId(assignedToId);
+  if ("error" in resolved) {
+    res.status(400).json({ error: resolved.error });
+    return;
+  }
+
+  const resolvedJobType = await resolveJobTypeCode(prisma, String(jobType));
+  if ("error" in resolvedJobType) {
+    res.status(400).json({ error: resolvedJobType.error });
+    return;
+  }
+
   let order: any = null;
   const MAX_ATTEMPTS = 5;
 
