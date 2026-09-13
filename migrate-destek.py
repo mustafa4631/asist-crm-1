@@ -9,7 +9,7 @@ SRC_PORT = 993
 SRC_USER = "ectr@normassistance.com.tr"
 SRC_PASS = "Ectr2426."
 
-DST_HOST = "imap.yandex.com"
+DST_HOST = "imap.yandex.com"b
 DST_PORT = 993
 DST_USER = "destek@normassistance.com.tr"
 DST_PASS = "Destek1645"
