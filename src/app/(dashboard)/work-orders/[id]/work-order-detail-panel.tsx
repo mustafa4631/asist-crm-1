@@ -324,7 +324,11 @@ export function WorkOrderDetailPanel({
       const res = await apiFetch(`/api/work-orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({
+          status: newStatus,
+          supplierId: supplierId || null,
+          supplierCost: parseCurrencyInput(supplierCost),
+        }),
       });
       if (!res.ok) return;
 

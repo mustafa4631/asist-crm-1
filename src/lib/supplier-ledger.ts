@@ -39,26 +39,121 @@ export async function syncSupplierLedger(
   });
 }
 
-/** Tedarikçiye yapılan ödemeyi cariye işler (bakiyeyi düşürür). */
+/** Tedarikçi işlemi ekler (HIZMET veya ODEME) ve bakiyeyi atomik günceller. */
+export async function recordSupplierTransaction(
+  supplierId: string,
+  type: "ODEME" | "HIZMET",
+  amount: number,
+  description?: string
+) {
+  if (amount <= 0) throw new Error("İşlem tutarı sıfırdan büyük olmalı");
+
+  return await prisma.$transaction(async (tx) => {
+    const entry = await tx.supplierLedgerEntry.create({
+      data: {
+        type,
+        supplierId,
+        amount,
+        description:
+          description?.trim() ||
+          (type === "ODEME"
+            ? `${domainLabels.supplier.one} ödemesi`
+            : `${domainLabels.supplier.one} hizmet bedeli`),
+      },
+    });
+
+    await tx.supplier.update({
+      where: { id: supplierId },
+      data: {
+        balance:
+          type === "HIZMET"
+            ? { increment: amount }
+            : { decrement: amount },
+      },
+    });
+
+    return entry;
+  });
+}
+
+/** Tedarikçiye yapılan ödemeyi cariye işler (bakiyeyi düşürür). Geriye uyumluluk için. */
 export async function recordSupplierPayment(
   supplierId: string,
   amount: number,
   description?: string
 ) {
-  if (amount <= 0) throw new Error("Ödeme tutarı sıfırdan büyük olmalı");
+  return await recordSupplierTransaction(supplierId, "ODEME", amount, description);
+}
 
-  await prisma.$transaction(async (tx) => {
-    await tx.supplierLedgerEntry.create({
+/** Cari hareketini günceller ve bakiye farkını hesaplayıp tedarikçi bakiyesini revize eder. */
+export async function updateSupplierLedgerEntry(
+  entryId: string,
+  newAmount: number,
+  newDescription?: string
+) {
+  if (newAmount <= 0) throw new Error("İşlem tutarı sıfırdan büyük olmalı");
+
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.supplierLedgerEntry.findUnique({
+      where: { id: entryId },
+    });
+
+    if (!existing) {
+      throw new Error("Cari hareketi bulunamadı");
+    }
+
+    const diff = newAmount - existing.amount;
+
+    const updated = await tx.supplierLedgerEntry.update({
+      where: { id: entryId },
       data: {
-        type: "ODEME",
-        supplierId,
-        amount,
-        description: description?.trim() || `${domainLabels.supplier.one} ödemesi`,
+        amount: newAmount,
+        ...(newDescription !== undefined ? { description: newDescription.trim() || null } : {}),
       },
     });
-    await tx.supplier.update({
-      where: { id: supplierId },
-      data: { balance: { decrement: amount } },
-    });
+
+    if (diff !== 0) {
+      await tx.supplier.update({
+        where: { id: existing.supplierId },
+        data: {
+          balance:
+            existing.type === "ODEME"
+              ? { decrement: diff }
+              : { increment: diff },
+        },
+      });
+    }
+
+    return updated;
   });
 }
+
+/** Cari hareketini siler ve bakiyeyi eski haline getirir. */
+export async function deleteSupplierLedgerEntry(entryId: string) {
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.supplierLedgerEntry.findUnique({
+      where: { id: entryId },
+    });
+
+    if (!existing) {
+      throw new Error("Cari hareketi bulunamadı");
+    }
+
+    await tx.supplier.update({
+      where: { id: existing.supplierId },
+      data: {
+        balance:
+          existing.type === "ODEME"
+            ? { increment: existing.amount }
+            : { decrement: existing.amount },
+      },
+    });
+
+    await tx.supplierLedgerEntry.delete({
+      where: { id: entryId },
+    });
+
+    return { success: true };
+  });
+}
+

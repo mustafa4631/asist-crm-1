@@ -45,9 +45,9 @@ export function DataTableHead({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function DataTableHeader({ children }: { children: React.ReactNode }) {
+export function DataTableHeader({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className="px-6 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+    <th className={cn("px-6 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-zinc-400", className)}>
       {children}
     </th>
   );
